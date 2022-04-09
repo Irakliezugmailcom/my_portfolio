@@ -1,0 +1,257 @@
+---
+title: "Cyclist_report_finale"
+author: "Irakli Ezugbaia"
+date: "4/7/2022"
+output: html_document
+---
+
+## Business Task
+
+In 2016, Cyclistic launched a successful bike-share offering. Since then, the program has grown to a fleet of 5,824 bicycles that are geotracked and locked into a network of 692 stations across Chicago. The bikes can be unlocked from one station and returned to any other station in the system anytime.
+
+The marketing strategy is based on the flexibility of its pricing plans: single-ride passes, full-day passes, and annual memberships. Cyclistic’s finance analysts have concluded that annual members are much more profitable than casual riders.
+
+The business task is to test a hypothesis that casual riders are ready made customers for annual plans. One of the questions for the marketing strategy is: how do annual members and casual riders use Cyclist bikes differently? Answers on this question may provide reasonable ground for recommending appropriate actions. 
+
+The stakeholders are: the marketing director, the company's analytics team, and the executive board.  
+
+## Description of Data Sources
+
+The data is generated from internal sources. It covers 12motnths of actual operations - January - December 2021. The data is organised in tables in cvs format.
+
+The data seems of good quality, and is:
+
+* reliable - as, reflects actual traffic numbers;
+* original - as is generated from internal company sources;
+* comprehensive - at certain level, as: a) the data does not reflect  card numbers used for payments, b) The analysis would produce better results, if direct link with customers IDs or credit cards displayed, c) the data does not present pricing information to enable better evaluation of casual riders decisions from financial perspective; 
+* current - as, covers recent period by months;
+* cited - as, is collected on internal sources. 
+
+## Documentation of Data Cleaning and Manipulaiton
+
+R is used of data cleaning and manipulation in this analysis. Focus on:
+
+* data type conventions;
+* null values;
+* duplicate records;
+* data range validity;
+* consistency of categorical value;
+* missing data. 
+
+### Packages, libraries for packages
+
+```{r}
+library(tidyverse)
+library(maps)
+library(lubridate)
+library(dplyr)
+library(scales)
+library(sf)
+```
+
+### 12 months data imported into R:
+
+```{r data import}
+m_1 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202101_td.csv")
+m_2 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202102_td.csv")
+m_3 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202103_td.csv")
+m_4 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202104_td.csv")
+m_5 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202105_td.csv")
+m_6 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202106_td.csv")
+m_7 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202107_td.csv")
+m_8 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202108_td.csv")
+m_9 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202109_td.csv")
+m_10 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202110_td.csv")
+m_11 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202111_td.csv")
+m_12 <- read_csv("/Users/ieremiafeodosii/Documents/Google data analytics certificate/Case-study_Cyclistic/data_csv/202112_td.csv")
+```
+
+### The data frame:
+
+* Bind into one data frame;
+* View specs.
+
+```{r bind into one}
+m <- rbind(m_1, m_2, m_3, m_4, m_5, m_6, m_7, m_8, m_9, m_10, m_11, m_12)
+glimpse(m)
+```
+
+### Data cleaning:
+
+* duplicates in ride_id column not identified;
+* 1'006'761 NA rows removed;
+* 198 wrong start/end times identified and removed;
+* member_casual column is correct; 
+* rider_id column is correct;
+* 1,023,831 distinct positions were identified for entry  (start_station_name, start_station_id, start_lat, start_lng). Ignored due to reasons explained below in limitations; 980,416 distinct positions were identified for entry  (end_station_name, end_station_id, end_lat, end_lng). Ignored due to reasons explained below in limitations;
+* start_station_id and end_station_id columns provide mixed info. mostly, stations are identified with two letter and a string of numbers.In some cases, stations are identified as three digit numbers. Need more info re protocol of stations identification for better cleaning in these columns. The issue is ignored for this analysis needs;
+* the dataframe with 4,588,302 rows and 13 columns is retained for further analysis. 
+
+```{r check for duplicates, NA removed}
+m %>% distinct(ride_id)
+glimpse(m)
+m %>% distinct(rideable_type)
+m_01 <- m %>% 
+  drop_na()
+glimpse(m_01)
+m_02 <- m_01 %>% 
+  filter((started_at - ended_at) < 0)
+glimpse(m_02)
+m_02 %>% distinct(member_casual)
+m_02 %>% 
+  distinct(start_station_name, start_station_id, start_lat, start_lng)
+m_02 %>% 
+  distinct(end_station_name, end_station_id, end_lat, end_lng)
+```
+### Additions to the data frame
+
+* weekday column is added to the data frame;
+* month column is added to the data frame;
+* time column is added to the data frame;
+* trip_duration column is added to the data frame.
+
+```{r additions to data frame}
+m_03 <- m_02 %>%
+  mutate(month = month(started_at),
+         hour = hms::as_hms(started_at))
+glimpse(m_03)
+weekday <- wday(m_03$started_at, label = TRUE)
+m_04 <- cbind(m_03, weekday)
+glimpse(m_04)
+duration <- difftime(m_04$started_at, m_04$ended_at, units = "mins")
+m_05 <- cbind(m_04, duration)
+glimpse(m_05)
+```
+## Summary of Analysis 
+
+### Analysis:
+
+#### trips_by_usertype:
+
+* 2'048'302 casual and 2'539'802 member trips totaled in a 12months period.
+
+```{r trips_by_usertype}
+trips_by_usertype <- m_05 %>% 
+  select(member_casual) %>% 
+  group_by(member_casual) %>% 
+  count()
+trips_by_usertype
+```
+#### trips_by_rideable_type
+
+```{r trips_by_rideable_type}
+trips_by_rideable_type <- m_05 %>% 
+  select(rideable_type) %>% 
+  group_by(m_05$rideable_type, m_05$member_casual) %>% 
+  count()
+trips_by_rideable_type 
+
+ggplot(m_05, aes(rideable_type, grpup = member_casual, fill = member_casual)) + 
+  geom_bar() +
+  labs(title = "trips_by_rideable_type", x = "number_of_trips") +
+  scale_y_continuous(labels = number)
+```
+#### trips_by_weekdays:
+
+```{r trips_by_weekdays}
+
+trips_by_weekdays <- m_05 %>% 
+  select(weekday) %>% 
+  group_by(m_05$weekday, m_05$member_casual) %>% 
+  count()
+trips_by_weekdays 
+
+ggplot(m_05, aes(weekday, group = member_casual, fill = member_casual)) + 
+  geom_bar() +
+  labs(title = "trips_by_weekdays", y = "number_of_trips") +
+  scale_y_continuous(labels = number)
+```
+#### trips_by_months:
+
+```{r trips_by_months}
+trips_by_months <- m_05 %>% 
+  select(month) %>% 
+  group_by(m_05$month, m_05$member_casual) %>% 
+  count()
+trips_by_months
+
+ggplot(m_05, aes(month, group = member_casual, fill = member_casual)) + 
+  geom_bar() +
+  labs(title = "trips_by_months", y = "number_of_trips") +
+  scale_y_continuous(labels = number)
+```
+#### trips_by_hour:
+
+```{r trips_by_hour}
+trips_by_hour <- m_05 %>% 
+  select(hour) %>% 
+  group_by(m_05$hour, m_05$member_casual) %>% 
+  count()
+trips_by_hour
+
+ggplot(m_05, aes(hour, group = member_casual, fill = member_casual)) + 
+  geom_bar() +
+  labs(title = "trips_by_hours", y = "number_of_trips")
+```
+
+#### trips_by_start_station:
+
+```{r trips_by_start_station}
+
+trips_by_station <- m_05 %>% 
+  select(start_station_name) %>% 
+  group_by(start_station_name, m_05$member_casual) %>% 
+  count()
+trips_by_station
+
+ggplot(m_05, aes(start_station_name, group = member_casual, fill = member_casual)) + 
+  geom_bar() +
+  labs(title = "trips_by_start_station", y = "number_of_trips")
+```
+
+#### trips_by_start_site:
+
+```{r trips_by_start_site}
+start_sites <- data.frame(longtitude = c(m_05$start_lng), latitude = c(m_05$start_lat))
+
+ggplot(start_sites, aes(latitude, longtitude, color = m_05$member_casual, alpha = 0.2)) +
+  geom_point()
+```
+
+#### average_trip_duration:
+
+```{r average_trip_duration}
+m_05 %>% group_by(member_casual) %>% 
+  summarise(mean = mean(duration))
+```
+
+### Limitations and assumptions:
+
+* no data re number of available bikes on stations at demand. Assumed full sypply;
+* no access to payments data;
+* no accesss to customer id data;
+* The analysis ignores  mistakes identified in data compilation. About 1mln distinct titles are identified for (start_station_name, start_station_id, start_lat, start_lng) and (end_station_name, end_station_id, end_lat, end_lng) combined entry. The sample size would decrease dramatically, if unique entries used, only. The stations data provided shall be corrected or a tolerated variance for lattitude and longtitude introduced for further analysis.  
+
+## Key Findings and Supporting Visualization 
+
+The business task of this analysis is to answer on a single question: how do annual members and casual riders use Cyclist bikes differently?
+
+Answers on the question based on key findings:
+
+* 2'048'302 casual and 2'539'802 member trips totalled in a 12months period;
+* trips_by_rideable_type - similar trends, rather than docked bikes, which are used by casual members only;
+* trips_by_weekdays -  somewhat the same trends; casual members increase  over the weekends;
+* trips_by_months - exact reflection of trends;
+* trips_by_hour - somewhat similar trends, other than significant dominance of casual riders from 7pm to 1am;
+* trips_by_start_station - numbers of casual rides by station names may help to determine exact locations for pilot marketing projects;
+* trips_by_start_site - presented for better visibility;
+* average_trip_duration - significant difference in average trip times, as casual member ride x2.5 time longer.  
+
+## Recommendaitons for a new promotion program, reorienting casual riders to members
+
+An advertising campaign for casual members that aims to transfer them to members shall focus on:
+
+* special offers for dock bikes;
+* promotion for weekend trips;
+* attention to non-business hours from 7pm to 1am;
+* better offers for longer in time and distance trips. 
